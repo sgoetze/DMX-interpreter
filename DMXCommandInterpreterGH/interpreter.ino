@@ -74,7 +74,7 @@ int32_t sizeUnit(String line, bool fade) {
 int16_t cmdInterpreter(String line, bool execNow) {
   int16_t *strobeP;
   int16_t startChn, endChn;
-  uint8_t val[MAX_VAL] = {0}; 
+  int16_t val[MAX_VAL] = {0}; 
   uint8_t index = 0;
   uint8_t *bufP;
   char tmpC;
@@ -134,10 +134,12 @@ int16_t cmdInterpreter(String line, bool execNow) {
       while ((i <= endChn) || (i == startChn)) { //do once or until endChn reached
         uint8_t j = 0;
         do {                          //once write all values or stop on endChn
-          if (val[j]>=0)
+          if (val[j]>=0) {
             *(bufP + i++) = val[j++];
-          else
+          } else {
+            i++;
             j++;
+          }
           if ((i > endChn) && (endChn != 0)) break;     //break do while loop  
         } while (j < index);
         if(i > endChn) break;        //else outer while loop once more
@@ -193,7 +195,7 @@ int16_t cmdInterpreter(String line, bool execNow) {
         line = line.substring(++tmpI);  
       }
       int16_t shift = endChn - index;
-      if (shift < startChn)           //more channels to shift as between startChn and EndChn
+      if (shift < startChn -1)           //not enough channels between startChn and EndChn for values
         return -1*(tmpI+tmp2I);
       while (shift >= startChn) {
         *(bufP + shift + index) = *(bufP + shift);
@@ -254,7 +256,7 @@ int16_t cmdInterpreter(String line, bool execNow) {
         line = line.substring(++tmpI);  
       }
       int16_t shift = startChn + index;
-      if (shift > endChn)           //more channels to shift as between startChn and EndChn
+      if (shift > endChn + 1)           //not enough channels between startChn and EndChn for values
         return -1*(tmpI+tmp2I);
       while (shift <= endChn) {
         *(bufP + shift - index) = *(bufP + shift);

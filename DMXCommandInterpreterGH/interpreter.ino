@@ -1,25 +1,25 @@
 
 //find a char that seperate commands - worker for findCmd()
-int16_t seek_multi (int16_t pos, int16_t dir) {  //find in multi
-  char c = multi[pos];
-  int16_t e = multi.length();
+int16_t seek_pos (String str, int16_t pos, int16_t dir) {  //find in str (multi, runni)
+  char c = str[pos];
+  int16_t e = str.length();
   if ((pos > 0) && ((c=='\n') || (c==';')))   //starting with line- or command-end
-    c = multi[--pos]; 
+    c = str[--pos]; 
   while (pos>=0 && pos<e && c!='\n' && c!=';') {
     pos += dir;
     if (pos < 0) return (pos);
-    c = multi[pos];
+    c = str[pos];
   }
   return (pos);
 }
 
-//locate and separate one instruction in command buffer "multi"
+//locate and separate one instruction in command buffer "multi" or "runni"
 //input param: current position, direction (previous, current, next) as (-1, 0, 1)
 //output to pointed vars: first position, length
 //special: *first == -1 -> no more line in this direction (-1, 1) or no line at all (0) 
 
-void findCmd(int16_t cPos, int16_t where, int16_t *first, int16_t *behind) {
-  int16_t endPos, be = multi.length();
+void findCmd(String str, int16_t cPos, int16_t where, int16_t *first, int16_t *behind) {
+  int16_t endPos, be = str.length();
   *behind = 0;
   if ((be == 0) || (cPos > be))  {
     *first = -1;
@@ -34,25 +34,25 @@ void findCmd(int16_t cPos, int16_t where, int16_t *first, int16_t *behind) {
     }
   }
   if (where < 0) {
-    endPos = seek_multi(cPos, -1);        //seek command
-    if (endPos <= 0) {                   //already multi[0] reached
+    endPos = seek_pos(str, cPos, -1);        //seek command
+    if (endPos <= 0) {                   //already str[0] reached
       *first = -1;
       return;  
     }
-    cPos = seek_multi(endPos - 1, -1);
+    cPos = seek_pos(str, endPos - 1, -1);
     cPos++;
   } else if (where > 0) {
-    cPos = seek_multi(cPos, 1);
+    cPos = seek_pos(str, cPos, 1);
     cPos++;
-    if (cPos >= be) {         // already end of multi[] reached
+    if (cPos >= be) {         // already end of str[] reached
       *first = -1;            // possibly last char is ';'
       return;
     }
-    endPos = seek_multi(cPos, 1);
+    endPos = seek_pos(str, cPos, 1);
   } else {
-    cPos = seek_multi(cPos, -1);
+    cPos = seek_pos(str, cPos, -1);
     cPos++;
-    endPos = seek_multi(cPos, 1);       
+    endPos = seek_pos(str, cPos, 1);       
   }
   *first = cPos;
   *behind = endPos;
@@ -67,7 +67,39 @@ int32_t sizeUnit(String line, bool fade) {
   return 1;
 }
 
-//interpreter of one command copied from the instruction sequence in "multi"
+//remove comments (parts of string between given char)
+//returns empty String if comment chars not in pairs
+String noComments(String inStr, char searchChr) {
+  String outStr = "";
+  int16_t pos1, pos2;
+  while (true) {
+    pos1 = inStr.indexOf(searchChr);
+    pos2 = inStr.indexOf(searchChr, pos1 + 1);
+    if (pos1 == -1) return outStr + inStr;
+    if (pos2 == -1) return "";
+    outStr.concat(inStr.substring(0, pos1));
+    inStr = inStr.substring(pos2 + 1);
+  }  
+}
+
+//remove unnessecary characters
+String noUseless(String str) {
+  str.toUpperCase();
+  str.replace("\r", "");
+  str.replace(" ","");
+  str.replace("\t","");
+  while (str.indexOf("\n\n") != -1 ) 
+    str.replace("\n\n", "\n");
+  while (str.indexOf(";;") != -1) 
+    str.replace(";;", ";");
+  while (str.indexOf(";\n") != -1) 
+    str.replace(";\n", "\n");
+  while (str.indexOf("\n;") != -1) 
+    str.replace("\n;", "\n");
+  return(str);
+}
+
+//interpreter of one command copied from the instruction sequence in "multi" or "runni"
 //if all of the commadn can be done the function does it
 //if at the end there is a time to wait -> a timer is set
 //if many actions have to be done time controlled (fade), an execute function is activated
@@ -80,9 +112,6 @@ int16_t cmdInterpreter(String line, bool execNow) {
   char tmpC;
   int16_t tmpI, tmp2I, valI;
   int32_t tmpL;
-
-  line.replace(" ","");       //only for interpreter
-  line.replace("\t","");
   
   if (line.length()==0)       //nothing to do
     return 0;
@@ -134,19 +163,17 @@ int16_t cmdInterpreter(String line, bool execNow) {
       while ((i <= endChn) || (i == startChn)) { //do once or until endChn reached
         uint8_t j = 0;
         do {                          //once write all values or stop on endChn
-          if (val[j]>=0) {
+          if (val[j]>=0)
             *(bufP + i++) = val[j++];
-          } else {
-            i++;
+          else
             j++;
-          }
           if ((i > endChn) && (endChn != 0)) break;     //break do while loop  
         } while (j < index);
         if(i > endChn) break;        //else outer while loop once more
       }
       if (execNow) {          //button "Execute", not for runMode"
-        memcpy(buffer_dmx, bufP, DMX_PACKET_SIZE);
-        lastSourceBuffer = tmpC - '0';
+        memset(buffer_dmx,0,DMX_PACKET_SIZE);
+        memcpy(buffer_dmx+startChn, bufP+startChn, endChn-startChn+1);
       }
       break;                  //case 'B' finished
     }
@@ -206,8 +233,8 @@ int16_t cmdInterpreter(String line, bool execNow) {
           *(bufP + startChn + j) = val[j];    //fill the channels that became free with given values 
       }
       if (execNow) {          //button "Execute", not for runMode"
-        memcpy(buffer_dmx, bufP, DMX_PACKET_SIZE);
-        lastSourceBuffer = tmpC - '0';
+        memset(buffer_dmx,0,DMX_PACKET_SIZE);
+        memcpy(buffer_dmx+startChn, bufP+startChn, endChn-startChn+index);
       }
       break;                  //case '>' finished
     }
@@ -267,8 +294,8 @@ int16_t cmdInterpreter(String line, bool execNow) {
           *(bufP + endChn - index + (j + 1)) = val[j];    //fill the channels that became free with given values 
       }
       if (execNow) {          //button "Execute", not for runMode"
-        memcpy(buffer_dmx, bufP, DMX_PACKET_SIZE);
-        lastSourceBuffer = tmpC - '0';
+        memset(buffer_dmx,0,DMX_PACKET_SIZE);
+        memcpy(buffer_dmx+startChn, bufP+startChn, endChn-startChn+index);
       }
       break;                  //case '<' finished
     }
@@ -390,8 +417,10 @@ int16_t cmdInterpreter(String line, bool execNow) {
               logWrite(EXECBLOCKED);
               return -1;
             }
-          else
-            endStrobeDemo = millis() + 5000L;
+          else {
+              endStrobeDemo = millis() + 5000L;
+              strobeBuffer = 0;
+            }
           }
         }
       }

@@ -1,4 +1,4 @@
-/*
+ /*
  * DMX Command Interpreter
  * ***********************
  * replacing these cheep 192 CH DMX Light Controllers (8 channel sliders)
@@ -12,7 +12,7 @@
  * created in December 2021
  * by Stefan Goetze
  * **********************************************************************
- * Many thanks to Rui and Sara Santos (Random Nerd Tutorials) 
+ * Many thanks to Sara and Ruis Santos (Random Nerd Tutorials) 
  * for knowledge and tricks about ESP8286 and ESP32 
  * 
  */
@@ -67,7 +67,6 @@ const char* password = "Hmmm???";      //PSK
 //ESP32 connection to Maxim MAX485
 int transmitPin = 17;  //to MAX485-Pin4:DI
 int receivePin = 16;   //to MAX485-Pin1:RO (possibly with level shifter if MAX485 powered with 5V, but ESP32 is said to have 5V tolerant IO)
-int enablePin = 21;    //to MAX485-Pin2:!RE and Pin3:DE
 
 dmx_port_t dmxPort = 2;   //which UART ist configured for DMX connection above
 
@@ -88,8 +87,9 @@ dmx_port_t dmxPort = 2;   //which UART ist configured for DMX connection above
 #define MAX_LOG 10                            //log lines  (max. 255)
 
 //global variables
-String multi;                                 //buffer for editing and running command sequences - work buffer
-int16_t cmdCounter;                           //cmd by cmd going through multi
+String multi;                                 //buffer for editing command sequences - work buffer
+String runni;                                 //buffer for running command sequences                   
+int16_t cmdCounter;                           //cmd by cmd going through runni
 String logs[MAX_LOG];                         //last MAX_LOG log messages
 uint8_t log_index;
 uint8_t buffer_dmx[DMX_PACKET_SIZE] = { 0 };  //buffer for transmitting DMX-channels time controlled
@@ -106,10 +106,10 @@ uint16_t strobeOnVal = 0;                     //strobeOnVal = flash - number of 
 uint16_t strobeOffVal = 0;                    //strobeOffVal = normal gap between flashs
 uint16_t strobeOn, strobeOff;                 //counters for above 
 int16_t startStr, endStr;                     //borders for limiting the strobe to a few channels
-uint8_t strobeBuffer;                         //if stobe is switched on i can be always 0 or only if buffer 1,2 is source
+uint8_t strobeBuffer;                         //if stobe is switched on it can be always (0) or only if buffer 1,2 is source
 bool justStrobe = false;                      //if strobe conditions changed just during stobe this enables to reload buffer_dmx              
 bool prepareRun = false;                      //button run pressed or run on boot - prepare for runMode
-bool runMode = false;                         //executing cmd sequence in "multi"
+bool runMode = false;                         //executing cmd sequence in runni
 bool displayWait = false;                     //constant display a given time in runTick is activated
 bool fadeWait = false;                        //fade steps with given time in runTick is activated
 bool strobeEna = false;                       //additional strobe effect during constant display or fade 
@@ -128,16 +128,17 @@ uint8_t loopIndex = 0;                        //nested loop pointer
 
 //prototypes for functions in interpreter tab
 int16_t cmdInterpreter(String, bool);
-void findCmd(int16_t, int16_t, int16_t *, int16_t *);
+void findCmd(String, int16_t, int16_t, int16_t *, int16_t *);
+String noComments(String, char);
+String noUseless(String);
 
-
-int16_t writeEEPROMFile(int16_t indexE) {   //write to EEPROM position <indexE> content of <multi>, length control for development
+int16_t writeEEPROMFile(String str, int16_t indexE) {   //write to EEPROM position <indexE> content of multi or runni, length control for development
   int16_t i;
   EEPROM.write(indexE++, 'D');
   EEPROM.write(indexE++, 'M');
   EEPROM.write(indexE++, 'X');
-  for (i=0; i<multi.length(); i++) {
-    EEPROM.write(indexE++, multi[i]);
+  for (i=0; i<str.length(); i++) {
+    EEPROM.write(indexE++, str[i]);
     if (i > 2042) break;
   }
   EEPROM.write(indexE,'\0');
@@ -162,19 +163,12 @@ int16_t readEEPROMFile (int16_t indexE) {  //read from EEPROM position <indexE> 
   return (i);
 }
 
-void format_multi() {       //eleminate chars in cmd buffer for easier cmd analyzing
-  multi.toUpperCase();
-  multi.replace("\r", "");
-  while (multi.indexOf("\n\n") != -1 ) 
-    multi.replace("\n\n", "\n");
-  while (multi.indexOf(";;") != -1) 
-    multi.replace(";;", ";");
-  while (multi.indexOf(";\n") != -1) 
-    multi.replace(";\n", "\n");
-  while (multi.indexOf("\n;") != -1) 
-    multi.replace("\n;", "\n");
-  if (multi[0] == '\n' || multi[0] == ';')
-    multi = multi.substring(1);  
+void fill_runni() {       //eleminate comments and not nessecary chars in cmd buffer for easier cmd analyzing - multi fills runni
+  if ((runni = noComments(multi, '"')) == "")
+    logWrite(COMMENT_ERROR);
+  runni = noUseless(runni);
+  if (runni[0] == '\n' || runni[0] == ';')
+    runni = runni.substring(1);  
 }
 
 void webPage(String area) {   //insert working elements in webpage prototype
@@ -190,10 +184,6 @@ void webPage(String area) {   //insert working elements in webpage prototype
     html.replace("$$$var04$$$", "checked");
   }
   html.replace("$$$var05$$$", logList());
-  if (runMode || prepareRun)
-    html.replace("$$$var06$$$", "readonly=\"readonly\"");
-  else   
-    html.replace("$$$var06$$$", "");
   server.send(200, "text/html", html);
 }
 
@@ -215,16 +205,25 @@ void logWrite(String myLog) {   //store a log message
 
 void handleRoot() {
   multi = server.arg("multi");
-  format_multi();
   webPage(multi); 
 }
 
 void handleSave() {
+  bool compressed = false;
   multi = server.arg("multi");
-  format_multi();
+  multi.replace("\r", "");
   if (!runMode) {
+    if (multi.length() > 2042) {
+      fill_runni();
+      if (runni.length() >2042) {
+        logWrite(SAVETOOBIG + String(runni.length()));
+        return;
+      } else {
+        compressed = true;
+      }
+    }
     String eFile = server.arg("eeprom");
-    int16_t index, r;
+    int16_t index;
     eeprom_no = eFile.toInt();
     if (eeprom_no == 1) index = 0;
     else if (eeprom_no == 2) index = 2048;
@@ -232,8 +231,8 @@ void handleSave() {
       Serial.println("error handleSave, no file number"); 
       return;
     }
-    r = writeEEPROMFile(index);
-    logWrite(((r < 2048)?String(FULLSAVE):String(PARTLYSAVE)) + eFile);
+    writeEEPROMFile(compressed ? runni : multi, index);
+    logWrite((!compressed ? FULLSAVE1+String(multi.length())+FULLSAVE2 : COMPRESSEDSAVE1+String(runni.length())+COMPRESSEDSAVE2) + eFile);
   } else
     logWrite(SAVEBLOCKED);  
   webPage(multi); 
@@ -256,7 +255,6 @@ void handleLoad() {
     logWrite((r < 0)?String(NOFILE):(r > 2047)?String(PARTLYREAD):String(FULLREAD) + eFile);
   } else
     logWrite(READBLOCKED);
-  format_multi();
   webPage(multi);
 }
  
@@ -264,11 +262,10 @@ void handleExec() {
   int16_t cmdStart, cmdEnd;
   String myStart = server.arg("startpos");
   multi = server.arg("multi");
-  format_multi();
   if (!runMode) {
-    findCmd(myStart.toInt(),0,&cmdStart,&cmdEnd);  //getting startpos & length of command where cursor is in
+    findCmd(multi, myStart.toInt(),0,&cmdStart,&cmdEnd);
     String cmdLine = "";
-    cmdLine.concat(multi.substring(cmdStart, cmdEnd));
+    cmdLine.concat(noUseless(multi.substring(cmdStart, cmdEnd)));
     int16_t r = cmdInterpreter(cmdLine, true); //only one cmd
     if (r<0)
       logWrite(String(ERRORPOS) + String(abs(r)) + ": |" + cmdLine + "|");
@@ -277,18 +274,6 @@ void handleExec() {
   } else
     logWrite(EXECBLOCKED);
   webPage(multi);  
-  
-/*
-  logWrite(String("Position: ") + myStart + String("gesamt: ") + String(multi.length()));
-//  logWrite(">"+multi.substring(0,18)+"<");
-  findCmd(myStart.toInt(),-1,&line_start,&line_end);
-  logWrite(String("davor: ") + String(line_start) + String(" - ") + String(line_end));
-  findCmd(myStart.toInt(),0,&line_start,&line_end);
-  logWrite(String("aktuell: ") + String(line_start) + String(" - ") + String(line_end));
-  findCmd(myStart.toInt(),1,&line_start,&line_end);
-  logWrite(String("danach: ") + String(line_start) + String(" - ") + String(line_end));
-  webPage(multi);
-*/  
 }
 
 void handleReload() {
@@ -297,7 +282,6 @@ void handleReload() {
 
 void handleRun() {
   multi = server.arg("multi");
-  format_multi();
   if (!runMode && !prepareRun) {
     prepareRun = true;
     logWrite(RUNNING);
@@ -310,7 +294,6 @@ void handleRun() {
 void handleStop() {
   static uint32_t stopPressed = 0;
   multi = server.arg("multi");
-  format_multi();
   uint32_t myNow = millis();
   if (runMode) {
     runMode = false;
@@ -475,7 +458,8 @@ void loop(void) {
     if (dmxPacketSent) {
       dmx_wait_tx_done(dmxPort, DMX_TX_PACKET_TOUT_TICK);  //returns ESP_OK or not, but what is to do?
       dmxPacketSent = false;
-      if ((tmpL = millis() - now) > 0) {
+      if ((tmpL = millis() - now) > DMX_TIME/2) {
+        logWrite(DMX_WAITED + String(tmpL));
         Serial.print("DMX done waited: ");
         Serial.println(tmpL);
         now = millis();
@@ -521,20 +505,24 @@ void loop(void) {
     dmxTick = now + DMX_TIME;    
   }
 
-  //set all to run command sequence from "multi"
+  //set all to run command sequence from "runni"
   if (prepareRun) {
     prepareRun = false;
-    cmdCounter = 0;
-    loopIndex = 0;
-    strobeOnVal = 0;
-    strobeOffVal = 0;
-    justStrobe = false;
-    displayWait = false;
-    fadeWait = false;
-    strobeEna = false;
-    runMode = true;
-    runState = 0;
-    loopIndex = 0;
+    if (multi.length() > 10) {  //expected minimal length of a program
+      cmdCounter = 0;
+      loopIndex = 0;
+      strobeOnVal = 0;
+      strobeOffVal = 0;
+      justStrobe = false;
+      displayWait = false;
+      fadeWait = false;
+      strobeEna = false;
+      runMode = true;
+      runState = 0;
+      loopIndex = 0;
+      fill_runni();
+    } else
+      logWrite(FINISHED);
   }
       
   //run mode 
@@ -544,23 +532,23 @@ void loop(void) {
         doRun();    //do it
       }
     } else {     
-      findCmd(cmdCounter, 0, &cmdStart, &cmdEnd);
+      findCmd(runni, cmdCounter, 0, &cmdStart, &cmdEnd);
       if (cmdStart >= 0) { //cmd found -> execute
         cmdCounter = cmdStart;
         String cmdLine = "";
-        cmdLine.concat(multi.substring(cmdStart, cmdEnd));
+        cmdLine.concat(runni.substring(cmdStart, cmdEnd));
         int16_t r = cmdInterpreter(cmdLine, false);
         if (r<0) {
           logWrite(String(ERRORPOS) + String(abs(r)) + ": |" + cmdLine + "|");
           runMode = false;   //wrong cmd, stop runMode immediate
         } else { 
           logWrite(String(OK_DONE) + ": |" + cmdLine + "|");
-          findCmd(cmdCounter, 1, &cmdStart, &cmdEnd);   //next cmd
+          findCmd(runni, cmdCounter, 1, &cmdStart, &cmdEnd);   //next cmd
         } 
       } 
       if (cmdStart < 0) {  //no cmd (or no next cmd) to execute 
           runMode = displayWait || fadeWait;  //end runMode if no open timer
-          cmdCounter = multi.length() + 1;   //no further succesful findCmd()
+          cmdCounter = runni.length() + 1;   //no further succesful findCmd()
           if (!runMode) {
             logWrite(FINISHED);
           }

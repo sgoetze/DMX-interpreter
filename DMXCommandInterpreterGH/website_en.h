@@ -94,7 +94,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   <input type="hidden" id="endpos" name="endpos">
   <div class="wrapper">
     <div class="main"> 
-      <textarea $$$var06$$$ id="multi" name="multi" rows="16" 
+      <textarea id="multi" name="multi" rows="16" 
        ondblclick="this.select();">$$$var02$$$</textarea>
     </div> 
   </div><br>
@@ -115,7 +115,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     </div>
     <div class="right">
       <button id="run" type="submit" formaction="/run">Run</button>
-      <button id="stop" type="submit" formaction="/stop">Stop/Edit</button>
+      <button id="stop" type="submit" formaction="/stop">Stop</button>
     </div>
   </div>
 </form>
@@ -129,8 +129,11 @@ $$$var05$$$
 //Log messages
 #define HTTPSTARTED "HTTP server started"
 #define EEPROMFAILED "failed to initialise EEPROM"
-#define PARTLYSAVE "input area only saved partly to File "
-#define FULLSAVE "input area completely saved to File "
+#define COMPRESSEDSAVE1 "input area compressed ("
+#define COMPRESSEDSAVE2 ") saved to file "
+#define FULLSAVE1 "input area completely ("
+#define FULLSAVE2 ") saved to file "
+#define SAVETOOBIG "program even compreesed too big: "
 #define SAVEBLOCKED "Running - Save blocked"
 #define NOFILE "no DMX commands in EEPROM File "
 #define PARTLYREAD "DMX commands partly read from EEPROM File "
@@ -146,3 +149,5 @@ $$$var05$$$
 #define FADERUN "Fade only when running"
 #define PROGERROR "Programming error: "
 #define FINISHED "Finished"
+#define DMX_WAITED "Waiting for DMX: "
+#define COMMENT_ERROR "Error in comments"

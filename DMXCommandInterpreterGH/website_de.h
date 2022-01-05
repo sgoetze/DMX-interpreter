@@ -94,7 +94,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   <input type="hidden" id="endpos" name="endpos">
   <div class="wrapper">
     <div class="main">
-      <textarea $$$var06$$$ id="multi" name="multi" rows="16" 
+      <textarea id="multi" name="multi" rows="16" 
        ondblclick="this.select();">$$$var02$$$</textarea>
     </div> 
   </div><br>
@@ -115,7 +115,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     </div>
     <div class="right">
       <button id="run" type="submit" formaction="/run">Starten</button>
-      <button id="stop" type="submit" formaction="/stop">Stopp/Edit.</button>
+      <button id="stop" type="submit" formaction="/stop">Stopp</button>
     </div>
   </div>
 </form>
@@ -129,20 +129,25 @@ $$$var05$$$
 //Log messages
 #define HTTPSTARTED "HTTP server gestartet"
 #define EEPROMFAILED "Fehler beim Initialisieren des EEPROMs"
-#define PARTLYSAVE "Eingabebereich nur teilweise gespeichert in Datei "
-#define FULLSAVE "Eingabebereich komplett gespeichert in Datei "
-#define SAVEBLOCKED "Programm l&auml;ft - Speichern geblockt"
+#define COMPRESSEDSAVE1 "Eingabebereich komprimiert ("
+#define COMPRESSEDSAVE2 ") gespeichert in Datei "
+#define FULLSAVE1 "Eingabebereich komplett ("
+#define FULLSAVE2 ") gespeichert in Datei "
+#define SAVETOOBIG "Programm auch komprimiert zu gross: "
+#define SAVEBLOCKED "Programm l&auml;uft - Speichern geblockt"
 #define NOFILE "keine Befehle in EEPROM-Datei "
 #define PARTLYREAD "DMX-Befehle nur teilweise gelesen aus EEPROM-Datei "
 #define FULLREAD "DMX-Befehle vollst&auml;ndig gelesen aus EEPROM-Datei "
-#define READBLOCKED "Programm l&auml;ft - Laden geblockt"
+#define READBLOCKED "Programm l&auml;uft - Laden geblockt"
 #define OTA "dieser Server erh&auml;lt gerade ein Update per OTA"
 #define ERRORPOS "Fehler ca. an Position "
-#define EXECBLOCKED "Programm l&auml;ft - Direkt abarbeiten wurde geblockt"
-#define STILLRUNNING "Programm l&auml;ft..."
+#define EXECBLOCKED "Programm l&auml;uft - Direkt abarbeiten wurde geblockt"
+#define STILLRUNNING "Programm l&auml;uft..."
 #define OK_DONE "OK - fertig"
 #define RUNNING "Gestartet..."
 #define STOPPED "Alles gestoppt"
 #define FADERUN "Fade geht nur bei Programmausf&uuml'hrung"
 #define PROGERROR "Programmierfehler: "
 #define FINISHED "Fertig"
+#define DMX_WAITED "Warten auf DMX: "
+#define COMMENT_ERROR "Fehler in Kommentaren"

@@ -1,7 +1,7 @@
 Example 1
 =========
 
-"shift with strobe effects 55 neopixel"
+"shift with strobe effects 55 neopixels"
 {
   B1:1-165=0,0,0
   B2:1-165=0,0,0
@@ -21,7 +21,7 @@ Example 1
 Example 2
 =========
 
-"crossfading and shifting 55 neopixel"
+"crossfading and shifting 55 neopixels"
 {
  B1:1-33=100,80,0;B2:1-33=0,20,100
  B1:34-66=30,0,100;B2:34-66=30,80,20

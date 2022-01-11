@@ -9,7 +9,7 @@
  * By Mitch Weisbrod
  * https://github.com/someweisguy/esp_dmx
  * **********************************************************************
- * created in December 2021
+ * created in December/January 2021
  * by Stefan Goetze
  * **********************************************************************
  * Many thanks to Sara and Ruis Santos (Random Nerd Tutorials) 
@@ -52,9 +52,9 @@ myWebServer server(80);
 //const IP address may be helpful
 //#define USE_DHCP                      //comment out "//#define ..." for no dhcp use
 #ifndef USE_DHCP
-IPAddress ip(192, 168, x, y);         //IP-parameters for this client
-IPAddress dns(192, 168, x, d);    
-IPAddress gateway(192, 168, x, g);
+IPAddress ip(192, 168, 111, 111);         //IP-parameters for this client
+IPAddress dns(192, 168, 111, 1);    
+IPAddress gateway(192, 168, 111, 1);
 IPAddress subnet(255, 255, 255, 0);
 #endif
 
@@ -62,11 +62,10 @@ IPAddress subnet(255, 255, 255, 0);
 const char* ssid = "Uijuijui";         //WiFi-AP 
 const char* password = "Hmmm???";      //PSK
 
-//parameters for OTA are set directly in setup()
-
 //ESP32 connection to Maxim MAX485
 int transmitPin = 17;  //to MAX485-Pin4:DI
 int receivePin = 16;   //to MAX485-Pin1:RO (possibly with level shifter if MAX485 powered with 5V, but ESP32 is said to have 5V tolerant IO)
+int enablePin = 21;    //to MAX485-Pin2:!RE and Pin3:DE
 
 dmx_port_t dmxPort = 2;   //which UART ist configured for DMX connection above
 
@@ -216,7 +215,8 @@ void handleSave() {
     if (multi.length() > 2042) {
       fill_runni();
       if (runni.length() >2042) {
-        logWrite(SAVETOOBIG + String(runni.length()));
+        logWrite(SAVETOOBIG);
+        logWrite(PROGLENGTH + String(multi.length()));
         return;
       } else {
         compressed = true;
@@ -232,7 +232,7 @@ void handleSave() {
       return;
     }
     writeEEPROMFile(compressed ? runni : multi, index);
-    logWrite((!compressed ? FULLSAVE1+String(multi.length())+FULLSAVE2 : COMPRESSEDSAVE1+String(runni.length())+COMPRESSEDSAVE2) + eFile);
+    logWrite((!compressed ? (FULLSAVE1+String(multi.length())+FULLSAVE2) : (COMPRESSEDSAVE1+String(runni.length())+COMPRESSEDSAVE2)) + eFile);
   } else
     logWrite(SAVEBLOCKED);  
   webPage(multi); 
@@ -299,8 +299,10 @@ void handleStop() {
     runMode = false;
     logWrite(STOPPED);
   }
-  if (myNow < stopPressed)
+  if (myNow < stopPressed) {
     memset(buffer_dmx, 0, DMX_PACKET_SIZE);
+    logWrite(BLACKOUT);
+  }
   webPage(multi);
   stopPressed = myNow + 3000L;
 }
@@ -361,8 +363,8 @@ void setup(void) {
   // ArduinoOTA.setPassword("");
 
   // Password can be set with it's md5 value as well
-  ArduinoOTA.setPasswordHash("*** this is what I used  ***");
-
+  // ArduinoOTA.setPasswordHash("*** this is what I used  ***");
+  
   ArduinoOTA
     .onStart([]() {
       String type;

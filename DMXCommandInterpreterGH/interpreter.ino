@@ -143,7 +143,7 @@ int16_t cmdInterpreter(String line, bool execNow) {
         if ((endChn < 1) || (endChn > DMX_PACKET_SIZE))
           return -1*(1+tmpI); 
       } else  //here if [',''-'] behind '=' or [',''-'] not in line at all
-        endChn = 0;           //no endChn written -> 0
+        endChn = startChn;           //no endChn written 
       if (endChn < startChn)  //if it has smaller value -> error
         return -1*(1+tmpI);
       tmpI = line.indexOf('=');      //find '=' again in shorted line

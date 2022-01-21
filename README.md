@@ -12,3 +12,4 @@ Thanks to Mitch Weisbrod
 where I took the DMX control completely and unchanged.
 
 And thanks to Rui and Sara Santos (Random Nerd Tutorials) for many tips and tricks around ESP8266 and ESP32.
+ 
